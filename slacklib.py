@@ -29,8 +29,9 @@ import webapp2
 from google.appengine.ext import db
 from google.appengine.api import memcache
 
-import models
 import util
+
+from entities.app_settings import AppSettings
 
 # The Slack slash command token is sent to us by the Slack server with
 # every incoming request.  We verify it here for security. To make it
@@ -55,7 +56,7 @@ def _web_api(api_method, payload):
     Raises a ValueError if something goes wrong.
     Returns a dictionary with the response.
     """
-    app_settings = models.AppSettings.get()
+    app_settings = AppSettings.get()
     payload.setdefault('token', app_settings.slack_token)
     uri = 'https://slack.com/api/' + api_method
     r = urllib2.urlopen(uri, urllib.urlencode(payload))
@@ -385,7 +386,7 @@ class SlashCommand(webapp2.RequestHandler):
         """
         req, res = self.request, self.response
 
-        expected_token = models.AppSettings.get().slack_slash_token
+        expected_token = AppSettings.get().slack_slash_token
 
         if not expected_token:
             res.write('Slack slash commands disabled. An admin '

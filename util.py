@@ -1,7 +1,7 @@
 import datetime
 
-from models import Snippet
-from models import User
+from entities.snippet import Snippet
+from entities.user import User
 
 
 # Functions for retrieving a user

@@ -17,8 +17,9 @@ dev_appserver.fix_sys_path()
 from google.appengine.ext import db
 from google.appengine.ext import testbed
 
-import models
 import slacklib
+from entites.snippet import Snippet
+from entities.user import User
 
 
 class SlashCommandTest(unittest.TestCase):
@@ -28,12 +29,12 @@ class SlashCommandTest(unittest.TestCase):
         slacklib._TODAY_FN = lambda: datetime.datetime(2015, 7, 29)
 
         # Stuart created his account, but has never once filled out a snippet
-        db.put(models.User(email='stuart@khanacademy.org'))
+        db.put(User(email='stuart@khanacademy.org'))
 
         # Fleetwood has two recent snippets, and always uses markdown lists,
         # but sometimes uses different list indicators or indention.
-        db.put(models.User(email='fleetwood@khanacademy.org'))
-        db.put(models.Snippet(
+        db.put(User(email='fleetwood@khanacademy.org'))
+        db.put(Snippet(
             email='fleetwood@khanacademy.org',
             week=datetime.date(2015, 7, 27),
             text=textwrap.dedent("""
@@ -42,7 +43,7 @@ class SlashCommandTest(unittest.TestCase):
             *  hoping to sniff more things! #yolo
             """)
         ))
-        db.put(models.Snippet(
+        db.put(Snippet(
             email='fleetwood@khanacademy.org',
             week=datetime.date(2015, 7, 20),
             text=textwrap.dedent("""
@@ -54,8 +55,8 @@ class SlashCommandTest(unittest.TestCase):
         # Toby has filled out two snippets, but missed a week in-between while
         # on vacation. When he got back from vacation he was still jetlagged so
         # he wrote a longform paragraph instead of a list.
-        db.put(models.User(email='toby@khanacademy.org'))
-        db.put(models.Snippet(
+        db.put(User(email='toby@khanacademy.org'))
+        db.put(Snippet(
             email='toby@khanacademy.org',
             week=datetime.date(2015, 7, 13),
             text=textwrap.dedent("""
@@ -64,7 +65,7 @@ class SlashCommandTest(unittest.TestCase):
 
             """)
         ))
-        db.put(models.Snippet(
+        db.put(Snippet(
             email='toby@khanacademy.org',
             week=datetime.date(2015, 7, 27),
             text=textwrap.dedent("""
@@ -81,8 +82,8 @@ class SlashCommandTest(unittest.TestCase):
         # Fozzie tried hard to create an entry manually in the previous week,
         # but didn't understand markdown list syntax and got discouraged (so
         # has no entry this week, and a malformed one last week).
-        db.put(models.User(email='fozzie@khanacademy.org'))
-        db.put(models.Snippet(
+        db.put(User(email='fozzie@khanacademy.org'))
+        db.put(Snippet(
             email='fozzie@khanacademy.org',
             week=datetime.date(2015, 7, 20),
             text=textwrap.dedent("""
@@ -92,7 +93,7 @@ class SlashCommandTest(unittest.TestCase):
         ))
 
     def _most_recent_snippet(self, user_email):
-        snippets_q = models.Snippet.all()
+        snippets_q = Snippet.all()
         snippets_q.filter('email = ', user_email)
         snippets_q.order('-week')        # newest snippet first
         return snippets_q.fetch(1)[0]

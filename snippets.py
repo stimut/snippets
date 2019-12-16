@@ -21,9 +21,11 @@ from google.appengine.ext import db
 import webapp2
 from webapp2_extras import jinja2
 
-import models
 import slacklib
 import util
+from entities.app_settings import AppSettings
+from entities.snippet import Snippet
+from entities.user import User, NULL_CATEGORY
 
 
 # This allows mocking in a different day, for testing.
@@ -77,7 +79,7 @@ def _get_or_create_user(email, put_new_user=True):
     else:
         # You can only create a new user under one of the app-listed domains.
         try:
-            app_settings = models.AppSettings.get()
+            app_settings = AppSettings.get()
         except ValueError:
             # TODO(csilvers): do this instead:
             #                 /admin/settings?redirect_to=user_setting
@@ -93,11 +95,11 @@ def _get_or_create_user(email, put_new_user=True):
                                % (' or '.join(allowed_domains), domain))
 
         # Set the user defaults based on the global app defaults.
-        user = models.User(created=_TODAY_FN(),
-                           email=email,
-                           uses_markdown=app_settings.default_markdown,
-                           private_snippets=app_settings.default_private,
-                           wants_email=app_settings.default_email)
+        user = User(created=_TODAY_FN(),
+                    email=email,
+                    uses_markdown=app_settings.default_markdown,
+                    private_snippets=app_settings.default_private,
+                    wants_email=app_settings.default_email)
         if put_new_user:
             db.put(user)
             db.get(user.key())    # ensure db consistency for HRD
@@ -134,7 +136,7 @@ def _can_view_private_snippets(my_email, snippet_email):
 def _send_to_chat(msg, url_path):
     """Send a message to the main room/channel for active chat integrations."""
     try:
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
     except ValueError:
         logging.warning('Not sending to chat: app settings not configured')
         return
@@ -172,7 +174,7 @@ class UserPage(BaseHandler):
             # up the user settings.
             if users.is_current_user_admin():
                 try:
-                    models.AppSettings.get()
+                    AppSettings.get()
                 except ValueError:
                     self.redirect("/admin/settings?redirect_to=user_setting"
                                   "&msg=Welcome+to+the+snippet+server!+"
@@ -210,7 +212,7 @@ class UserPage(BaseHandler):
                          self.request.get('edit', '1') == '1'),
             'user': user,
             'snippets': snippets,
-            'null_category': models.NULL_CATEGORY,
+            'null_category': NULL_CATEGORY,
         }
         self.render_response('user_snippets.html', template_values)
 
@@ -237,13 +239,13 @@ class SummaryPage(BaseHandler):
         else:
             week = util.existingsnippet_monday(_TODAY_FN())
 
-        snippets_q = models.Snippet.all()
+        snippets_q = Snippet.all()
         snippets_q.filter('week = ', week)
         snippets = snippets_q.fetch(1000)   # good for many users...
         # TODO(csilvers): filter based on wants_to_view
 
         # Get all the user records so we can categorize snippets.
-        user_q = models.User.all()
+        user_q = User.all()
         results = user_q.fetch(1000)
         email_to_category = {}
         email_to_user = {}
@@ -266,7 +268,7 @@ class SummaryPage(BaseHandler):
                                                    snippet.email)):
                 continue
             category = email_to_category.get(
-                snippet.email, models.NULL_CATEGORY
+                snippet.email, NULL_CATEGORY
             )
             if snippet.email in email_to_user:
                 snippets_and_users_by_category.setdefault(category, []).append(
@@ -274,7 +276,7 @@ class SummaryPage(BaseHandler):
                 )
             else:
                 snippets_and_users_by_category.setdefault(category, []).append(
-                    (snippet, models.User(email=snippet.email))
+                    (snippet, User(email=snippet.email))
                 )
 
             if snippet.email in email_to_category:
@@ -286,7 +288,7 @@ class SummaryPage(BaseHandler):
         # snippet again.)
         for (email, category) in email_to_category.iteritems():
             if not email_to_user[email].is_hidden:
-                snippet = models.Snippet(email=email, week=week)
+                snippet = Snippet(email=email, week=week)
                 snippets_and_users_by_category.setdefault(category, []).append(
                     (snippet, email_to_user[snippet.email])
                 )
@@ -329,7 +331,7 @@ class UpdateSnippet(BaseHandler):
 
         # TODO(csilvers): make this get-update-put atomic.
         # (maybe make the snippet id be email + week).
-        q = models.Snippet.all()
+        q = Snippet.all()
         q.filter('email = ', email)
         q.filter('week = ', week)
         snippet = q.get()
@@ -347,11 +349,11 @@ class UpdateSnippet(BaseHandler):
             snippet.is_markdown = is_markdown
         else:
             # add the snippet to the db
-            snippet = models.Snippet(created=_TODAY_FN(),
-                                     display_name=user.display_name,
-                                     email=email, week=week,
-                                     text=text, private=private,
-                                     is_markdown=is_markdown)
+            snippet = Snippet(created=_TODAY_FN(),
+                              display_name=user.display_name,
+                              email=email, week=week,
+                              text=text, private=private,
+                              is_markdown=is_markdown)
         db.put(snippet)
         db.get(snippet.key())  # ensure db consistency for HRD
 
@@ -492,7 +494,7 @@ class UpdateSettings(BaseHandler):
 
         user.is_hidden = is_hidden
         user.display_name = display_name
-        user.category = category or models.NULL_CATEGORY
+        user.category = category or NULL_CATEGORY
         user.uses_markdown = uses_markdown
         user.private_snippets = private_snippets
         user.wants_email = wants_email
@@ -516,8 +518,8 @@ class AppSettings(BaseHandler):
 
     def get(self):
         my_domain = _current_user_email().split('@')[-1]
-        app_settings = models.AppSettings.get(create_if_missing=True,
-                                              domains=[my_domain])
+        app_settings = AppSettings.get(create_if_missing=True,
+                                       domains=[my_domain])
 
         template_values = {
             'logout_url': users.create_logout_url('/'),
@@ -557,8 +559,8 @@ class UpdateAppSettings(BaseHandler):
 
         @db.transactional
         def update_settings():
-            app_settings = models.AppSettings.get(create_if_missing=True,
-                                                  domains=domains)
+            app_settings = AppSettings.get(create_if_missing=True,
+                                           domains=domains)
             app_settings.domains = domains
             app_settings.default_private = default_private
             app_settings.default_markdown = default_markdown
@@ -617,7 +619,7 @@ class ManageUsers(BaseHandler):
                               % (sort_by, email_of_user_to_delete))
                 return
 
-        user_q = models.User.all()
+        user_q = User.all()
         results = user_q.fetch(1000)
 
         # Tuple: (email, is-hidden, creation-time, days since last snippet)
@@ -686,7 +688,7 @@ def _get_email_to_current_snippet_map(today):
       a map from email (user.email for each user) to True or False,
       depending on if they've written snippets for this week or not.
     """
-    user_q = models.User.all()
+    user_q = User.all()
     users = user_q.fetch(1000)
     retval = {}
     for user in users:
@@ -695,7 +697,7 @@ def _get_email_to_current_snippet_map(today):
         retval[user.email] = False       # assume the worst, for now
 
     week = util.existingsnippet_monday(today)
-    snippets_q = models.Snippet.all()
+    snippets_q = Snippet.all()
     snippets_q.filter('week = ', week)
     snippets = snippets_q.fetch(1000)
     for snippet in snippets:
@@ -707,7 +709,7 @@ def _get_email_to_current_snippet_map(today):
 
 def _maybe_send_snippets_mail(to, subject, template_path, template_values):
     try:
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
     except ValueError:
         logging.error('Not sending email: app settings are not configured.')
         return

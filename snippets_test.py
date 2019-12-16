@@ -33,9 +33,10 @@ from google.appengine.ext import db
 from google.appengine.ext import testbed
 import webtest   # may need to do 'pip install webtest'
 
-import models
 import slacklib
 import snippets
+from entities.app_settings import AppSettings
+from entities.user import User
 
 
 _TEST_TODAY = datetime.datetime(2012, 2, 23)
@@ -68,7 +69,7 @@ class SnippetsTestBase(unittest.TestCase):
         self.testbed.setup_env(user_id=email, overwrite=True)
         self.testbed.setup_env(user_is_admin='0', overwrite=True)
         # Now make sure there are global settings.
-        settings = models.AppSettings.get(
+        settings = AppSettings.get(
             create_if_missing=True,
             domains=['example.com', 'some_other_domain.com'],
         )
@@ -329,7 +330,7 @@ class NewUserTestCase(UserTestBase):
     def testNewAdminWithNoAppSettings(self):
         """The first time someone logs in, we should go to app settings."""
         self.set_is_admin()
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.delete()
 
         response = self.request_fetcher.get('/')
@@ -340,7 +341,7 @@ class NewUserTestCase(UserTestBase):
     def testNewAdminContinueUrls(self):
         """We should go from app settings to user settings to snippet."""
         self.set_is_admin()
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.delete()
 
         response = self.request_fetcher.get('/')
@@ -361,14 +362,14 @@ class NewUserTestCase(UserTestBase):
 
     def testNewUserWithNoAppSettings(self):
         """For non-admins, we should not offer the app-settings page."""
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.delete()
 
         response = self.request_fetcher.get('/')
         self.assertIn('<title>New user</title>', response.body)
 
     def testNewUserInheritsAppDefaults(self):
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.default_markdown = True
         app_settings.default_private = True
         app_settings.put()
@@ -434,7 +435,7 @@ class AppSettingsTestCase(UserTestBase):
     def testDomainsParsing(self):
         self.request_fetcher.get(
             '/admin/update_settings?domains=a.com,b.com++c.com%0Bd.com,%0B')
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         self.assertEqual(['a.com', 'b.com', 'c.com', 'd.com'],
                          app_settings.domains)
 
@@ -797,7 +798,7 @@ class SetAndViewSnippetsTestCase(UserTestBase):
         self.request_fetcher.get(url)
 
         # Now delete user 2
-        u = models.User.all().filter('email =', '2@example.com').get()
+        u = User.all().filter('email =', '2@example.com').get()
         u.delete()
 
         response = self.request_fetcher.get('/weekly?week=02-20-2012')
@@ -1084,7 +1085,7 @@ class PrivateSnippetTestCase(UserTestBase):
 
     def testDomainMatching(self):
         # Let's make it legal for all these domains to log in.
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.domains = ['example.com', 'example.comm', 'example.co',
                                 'my-example.com', 'ample.com']
         app_settings.put()
@@ -1322,13 +1323,13 @@ class SendingEmailTestCase(UserTestBase):
         pass
 
     def testDoNotSendMailWithoutSetting(self):
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.delete()
         self.request_fetcher.get('/admin/send_reminder_email')
         self.assertEmailNotSentTo('does_not_have_snippet@example.com')
 
     def testDefaultEmailFrom(self):
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         self.assertEqual("Snippet Server <user+snippets@example.com>",
                          app_settings.email_from)
 
@@ -1410,7 +1411,7 @@ class SendingEmailTestCase(UserTestBase):
 
         # We'll do 500 users.  Rather than go through the request
         # API, we modify the db directly; it's much faster.
-        users = [models.User(email='snippets%d@example.com' % i)
+        users = [User(email='snippets%d@example.com' % i)
                  for i in xrange(500)]
         db.put(users)
 
@@ -1430,7 +1431,7 @@ class SendingChatTestCase(UserTestBase):
         # (The superclass sets up slack_sends for us.)
         super(SendingChatTestCase, self).setUp()
         # Let's set up default chat configs.
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.slack_channel = '#slack_chann3l'
         app_settings.slack_token = 'st'
         app_settings.slack_slash_token = 'sst'
@@ -1445,7 +1446,7 @@ class SendingChatTestCase(UserTestBase):
         self.assertIn('https://example.com', self.slack_sends[0][1])
 
     def test_disable_slack(self):
-        app_settings = models.AppSettings.get()
+        app_settings = AppSettings.get()
         app_settings.slack_channel = ''
         app_settings.put()
 
