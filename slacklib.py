@@ -3,10 +3,9 @@ from __future__ import unicode_literals
 
 """Snippets server -> Slack integration.
 
-This provides HipChat integration with the snippet server, for
-organizations that use Slack for messaging.  This provides Slack
-integration with the snippet server, as well prototype CLI style
-interaction with snippets via the Slack "slash commands" integration.
+This provides Slack integration with the snippet server, as well
+prototype CLI style interaction with snippets via the Slack "slash
+commands" integration.
 
 Talking to the Slack Web API requires a token.  The admin must enter
 the value of this token on /admin/settings.  There are instructions
