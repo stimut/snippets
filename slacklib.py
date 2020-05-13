@@ -32,6 +32,7 @@ from google.appengine.api import memcache
 import util
 
 from entities.app_settings import AppSettings
+from entities import snippet
 
 # The Slack slash command token is sent to us by the Slack server with
 # every incoming request.  We verify it here for security. To make it
@@ -174,8 +175,7 @@ def _user_snippet(user_email, weeks_back=0):
         'User %s got snippets from db: %s', user_email, len(user_snips)
     )
 
-    filled_snips = util.fill_in_missing_snippets(user_snips, account,
-                                                 user_email, _TODAY_FN())
+    filled_snips = snippet.fill_in_missing_snippets(user_snips, account, user_email, _TODAY_FN())
     logging.debug(
         'User %s snippets *filled* to: %s', user_email, len(filled_snips)
     )

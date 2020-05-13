@@ -30,3 +30,17 @@ class User(db.Model):
     # TODO(csilvers): make a ListProperty instead.
     wants_to_view = db.TextProperty(default='all')     # comma-separated list
     display_name = db.TextProperty(default='')         #  display name of the user
+
+
+def get_user(email):
+    """Return the user object with the given email, or None if not found."""
+    q = User.all()
+    q.filter('email = ', email)
+    return q.get()
+
+
+def get_user_or_die(email):
+    user = get_user(email)
+    if not user:
+        raise ValueError('User "%s" not found' % email)
+    return user

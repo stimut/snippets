@@ -24,8 +24,8 @@ from webapp2_extras import jinja2
 import slacklib
 import util
 from entities.app_settings import AppSettings
-from entities.snippet import Snippet
-from entities.user import User, NULL_CATEGORY
+from entities import snippet
+from entities import user
 
 
 # This allows mocking in a different day, for testing.
@@ -64,7 +64,7 @@ def _get_or_create_user(email, put_new_user=True):
     NOTE: Any access that causes _get_or_create_user() is an access that
     indicates the user is active again, so they are "unhidden" in the db.
     """
-    user = util.get_user(email)
+    user = user.get_user(email)
     if user:
         if user.is_hidden:
             # Any access that causes _get_or_create_user() is an access
@@ -95,7 +95,7 @@ def _get_or_create_user(email, put_new_user=True):
                                % (' or '.join(allowed_domains), domain))
 
         # Set the user defaults based on the global app defaults.
-        user = User(created=_TODAY_FN(),
+        user = user.User(created=_TODAY_FN(),
                     email=email,
                     uses_markdown=app_settings.default_markdown,
                     private_snippets=app_settings.default_private,
@@ -167,7 +167,7 @@ class UserPage(BaseHandler):
             return _login_page(self.request, self)
 
         user_email = self.request.get('u', _current_user_email())
-        user = util.get_user(user_email)
+        user = user.get_user(user_email)
 
         if not user:
             # If there are no app settings, set those up before setting
@@ -190,13 +190,13 @@ class UserPage(BaseHandler):
             self.render_response('new_user.html', template_values)
             return
 
-        snippets = util.snippets_for_user(user_email)
+        snippets = snippet.snippets_for_user(user_email)
 
         if not _can_view_private_snippets(_current_user_email(), user_email):
             snippets = [snippet for snippet in snippets if not snippet.private]
-        snippets = util.fill_in_missing_snippets(snippets, user,
-                                                 user_email, _TODAY_FN())
-        snippets.reverse()                  # get to newest snippet first
+        snippets = snippet.fill_in_missing_snippets(snippets, user,
+                                            user_email, _TODAY_FN())
+        snippets.reverse()  # get to newest snippet first
 
         template_values = {
             'logout_url': users.create_logout_url('/'),
@@ -212,7 +212,7 @@ class UserPage(BaseHandler):
                          self.request.get('edit', '1') == '1'),
             'user': user,
             'snippets': snippets,
-            'null_category': NULL_CATEGORY,
+            'null_category': user.NULL_CATEGORY,
         }
         self.render_response('user_snippets.html', template_values)
 
@@ -239,13 +239,13 @@ class SummaryPage(BaseHandler):
         else:
             week = util.existingsnippet_monday(_TODAY_FN())
 
-        snippets_q = Snippet.all()
+        snippets_q = snippet.Snippet.all()
         snippets_q.filter('week = ', week)
         snippets = snippets_q.fetch(1000)   # good for many users...
         # TODO(csilvers): filter based on wants_to_view
 
         # Get all the user records so we can categorize snippets.
-        user_q = User.all()
+        user_q = user.User.all()
         results = user_q.fetch(1000)
         email_to_category = {}
         email_to_user = {}
@@ -268,7 +268,7 @@ class SummaryPage(BaseHandler):
                                                    snippet.email)):
                 continue
             category = email_to_category.get(
-                snippet.email, NULL_CATEGORY
+                snippet.email, user.NULL_CATEGORY
             )
             if snippet.email in email_to_user:
                 snippets_and_users_by_category.setdefault(category, []).append(
@@ -276,7 +276,7 @@ class SummaryPage(BaseHandler):
                 )
             else:
                 snippets_and_users_by_category.setdefault(category, []).append(
-                    (snippet, User(email=snippet.email))
+                    (snippet, user.User(email=snippet.email))
                 )
 
             if snippet.email in email_to_category:
@@ -288,7 +288,7 @@ class SummaryPage(BaseHandler):
         # snippet again.)
         for (email, category) in email_to_category.iteritems():
             if not email_to_user[email].is_hidden:
-                snippet = Snippet(email=email, week=week)
+                snippet = snippet.Snippet(email=email, week=week)
                 snippets_and_users_by_category.setdefault(category, []).append(
                     (snippet, email_to_user[snippet.email])
                 )
@@ -331,7 +331,7 @@ class UpdateSnippet(BaseHandler):
 
         # TODO(csilvers): make this get-update-put atomic.
         # (maybe make the snippet id be email + week).
-        q = Snippet.all()
+        q = snippet.Snippet.all()
         q.filter('email = ', email)
         q.filter('week = ', week)
         snippet = q.get()
@@ -349,7 +349,7 @@ class UpdateSnippet(BaseHandler):
             snippet.is_markdown = is_markdown
         else:
             # add the snippet to the db
-            snippet = Snippet(created=_TODAY_FN(),
+            snippet = snippet.Snippet(created=_TODAY_FN(),
                               display_name=user.display_name,
                               email=email, week=week,
                               text=text, private=private,
@@ -494,7 +494,7 @@ class UpdateSettings(BaseHandler):
 
         user.is_hidden = is_hidden
         user.display_name = display_name
-        user.category = category or NULL_CATEGORY
+        user.category = category or user.NULL_CATEGORY
         user.uses_markdown = uses_markdown
         user.private_snippets = private_snippets
         user.wants_email = wants_email
@@ -593,7 +593,7 @@ class ManageUsers(BaseHandler):
             if name.startswith('hide '):
                 email_of_user_to_hide = name[len('hide '):]
                 # TODO(csilvers): move this get/update/put atomic into a txn
-                user = util.get_user_or_die(email_of_user_to_hide)
+                user = user.get_user_or_die(email_of_user_to_hide)
                 user.is_hidden = True
                 user.put()
                 time.sleep(0.1)   # encourage eventual consistency
@@ -603,7 +603,7 @@ class ManageUsers(BaseHandler):
             if name.startswith('unhide '):
                 email_of_user_to_unhide = name[len('unhide '):]
                 # TODO(csilvers): move this get/update/put atomic into a txn
-                user = util.get_user_or_die(email_of_user_to_unhide)
+                user = user.get_user_or_die(email_of_user_to_unhide)
                 user.is_hidden = False
                 user.put()
                 time.sleep(0.1)   # encourage eventual consistency
@@ -612,21 +612,21 @@ class ManageUsers(BaseHandler):
                 return
             if name.startswith('delete '):
                 email_of_user_to_delete = name[len('delete '):]
-                user = util.get_user_or_die(email_of_user_to_delete)
+                user = user.get_user_or_die(email_of_user_to_delete)
                 db.delete(user)
                 time.sleep(0.1)   # encourage eventual consistency
                 self.redirect('/admin/manage_users?sort_by=%s&msg=%s+deleted'
                               % (sort_by, email_of_user_to_delete))
                 return
 
-        user_q = User.all()
+        user_q = user.User.all()
         results = user_q.fetch(1000)
 
         # Tuple: (email, is-hidden, creation-time, days since last snippet)
         user_data = []
         for user in results:
             # Get the last snippet for that user.
-            last_snippet = util.most_recent_snippet_for_user(user.email)
+            last_snippet = most_recent_snippet_for_user(user.email)
             if last_snippet:
                 seconds_since_snippet = (
                     (_TODAY_FN().date() - last_snippet.week).total_seconds())
@@ -688,7 +688,7 @@ def _get_email_to_current_snippet_map(today):
       a map from email (user.email for each user) to True or False,
       depending on if they've written snippets for this week or not.
     """
-    user_q = User.all()
+    user_q = user.User.all()
     users = user_q.fetch(1000)
     retval = {}
     for user in users:
@@ -697,7 +697,7 @@ def _get_email_to_current_snippet_map(today):
         retval[user.email] = False       # assume the worst, for now
 
     week = util.existingsnippet_monday(today)
-    snippets_q = Snippet.all()
+    snippets_q = snippet.Snippet.all()
     snippets_q.filter('week = ', week)
     snippets = snippets_q.fetch(1000)
     for snippet in snippets:
