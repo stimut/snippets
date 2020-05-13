@@ -45,7 +45,7 @@ _REQUIRE_SLASH_TOKEN = True
 _TODAY_FN = datetime.datetime.now
 
 # The web URL we point people to as the base for web operations
-_WEB_URL = 'http://' + os.environ.get('SERVER_NAME', 'localhost')
+_WEB_URL = "http://" + os.environ.get("SERVER_NAME", "localhost")
 
 
 def _web_api(api_method, payload):
@@ -58,8 +58,8 @@ def _web_api(api_method, payload):
     Returns a dictionary with the response.
     """
     app_settings = AppSettings.get()
-    payload.setdefault('token', app_settings.slack_token)
-    uri = 'https://slack.com/api/' + api_method
+    payload.setdefault("token", app_settings.slack_token)
+    uri = "https://slack.com/api/" + api_method
     r = urllib2.urlopen(uri, urllib.urlencode(payload))
 
     # check return code for server errors
@@ -68,8 +68,8 @@ def _web_api(api_method, payload):
     # parse the JSON...
     # slack web API always returns either `"ok": true` or `"error": "reason"`
     reply = json.loads(r.read())
-    if not reply['ok']:
-        raise ValueError('Slack error: %s' % reply['error'])
+    if not reply["ok"]:
+        raise ValueError("Slack error: %s" % reply["error"])
     return reply
 
 
@@ -78,10 +78,10 @@ def _get_user_email(uid):
 
     Raises ValueError if could not be retrieved.
     """
-    reply = _web_api('users.info', {'user': uid})  # possible ValueError
-    email = reply.get('user', {}).get('profile', {}).get('email', None)
+    reply = _web_api("users.info", {"user": uid})  # possible ValueError
+    email = reply.get("user", {}).get("profile", {}).get("email", None)
     if email is None:
-        raise ValueError('Slack user profile did not have email')
+        raise ValueError("Slack user profile did not have email")
     return email
 
 
@@ -94,13 +94,13 @@ def _get_user_email_cached(uid, force_refresh=False):
 
     Raises ValueError if could not be retrieved.
     """
-    key = 'slack_profile_email_' + uid
+    key = "slack_profile_email_" + uid
     cached_data = memcache.get(key)
     if (cached_data is None) or force_refresh:
         logging.debug("cache miss/refresh for slack email lookup %s", uid)
         email = _get_user_email(uid)  # possible ValueError
         if not memcache.set(key=key, value=email, time=86400):
-            logging.error('memcache set failed!')
+            logging.error("memcache set failed!")
         return email
     else:
         logging.debug("cache hit for slack email lookup %s", uid)
@@ -110,23 +110,28 @@ def _get_user_email_cached(uid, force_refresh=False):
 def send_to_slack_channel(channel, msg):
     """Send a plaintext message to a Slack channel."""
     try:
-        _web_api('chat.postMessage', {
-            'channel': channel,
-            'text': msg,
-            'username': 'Snippets',
-            'icon_emoji': ':pencil:',
-            'unfurl_links': False,    # no link previews, please
-        })
+        _web_api(
+            "chat.postMessage",
+            {
+                "channel": channel,
+                "text": msg,
+                "username": "Snippets",
+                "icon_emoji": ":pencil:",
+                "unfurl_links": False,  # no link previews, please
+            },
+        )
     except ValueError, why:
-        logging.error('Failed sending message to slack: %s', why)
+        logging.error("Failed sending message to slack: %s", why)
 
 
 ###############################
 ### SLASH COMMANDS ARE FUN! ###
 ###############################
 
+
 def command_usage():
-    return textwrap.dedent("""
+    return textwrap.dedent(
+        """
     /snippets                displays your current snippets
     /snippets list           displays your current snippets
     /snippets last           displays your snippets from last week
@@ -134,15 +139,15 @@ def command_usage():
     /snippets del [n]        removes snippet number N
     /snippets dump           shows your snippets list unformatted
     /snippets help           display this help screen
-    """)
+    """
+    )
 
 
 def command_help():
     """Return the help string for slash commands."""
     return (
         "I can help you manage your "
-        "<{}|weekly snippets>! :pencil:".format(_WEB_URL) +
-        command_usage()
+        "<{}|weekly snippets>! :pencil:".format(_WEB_URL) + command_usage()
     )
 
 
@@ -150,8 +155,7 @@ def _no_user_error(user_email):
     return (
         "You don't appear to have a snippets account yet!\n"
         "To create one, go to {}\n"
-        "We looked for your Slack email address: {}"
-        .format(_WEB_URL, user_email)
+        "We looked for your Slack email address: {}".format(_WEB_URL, user_email)
     )
 
 
@@ -171,14 +175,10 @@ def _user_snippet(user_email, weeks_back=0):
     """
     account = util.get_user_or_die(user_email)  # can raise ValueError
     user_snips = util.snippets_for_user(user_email)
-    logging.debug(
-        'User %s got snippets from db: %s', user_email, len(user_snips)
-    )
+    logging.debug("User %s got snippets from db: %s", user_email, len(user_snips))
 
     filled_snips = snippet.fill_in_missing_snippets(user_snips, account, user_email, _TODAY_FN())
-    logging.debug(
-        'User %s snippets *filled* to: %s', user_email, len(filled_snips)
-    )
+    logging.debug("User %s snippets *filled* to: %s", user_email, len(filled_snips))
 
     index = (-1) - weeks_back
     return filled_snips[index]
@@ -200,20 +200,20 @@ def _snippet_items(snippet):
         return []
 
     # parse out all markdown list items
-    items = re.findall(r'^[-*+] +(.*)$', unformatted, re.MULTILINE)
+    items = re.findall(r"^[-*+] +(.*)$", unformatted, re.MULTILINE)
 
     # if there were any lines that didn't yield an item, assume there was
     # something we didn't parse. since we never want to lose existing data
     # for a user, this is an error condition.
     if len(items) < len(unformatted.splitlines()):
-        raise SyntaxError('unparsed lines in user snippet: %s' % unformatted)
+        raise SyntaxError("unparsed lines in user snippet: %s" % unformatted)
 
     return items
 
 
 def _format_snippet_items(items):
     """Format snippet items for display."""
-    fi = ['> :pushpin: *[{}]* {}'.format(i, x) for i, x in enumerate(items)]
+    fi = ["> :pushpin: *[{}]* {}".format(i, x) for i, x in enumerate(items)]
     return "\n".join(fi)
 
 
@@ -237,10 +237,7 @@ def command_list(user_email):
             "`/snippets help` ."
         )
 
-    return textwrap.dedent(
-        "*Your snippets for the week so far:*\n" +
-        _format_snippet_items(items)
-    )
+    return textwrap.dedent("*Your snippets for the week so far:*\n" + _format_snippet_items(items))
 
 
 def command_last(user_email):
@@ -262,15 +259,12 @@ def command_last(user_email):
     if not items:
         return "*You didn't have any snippets last week!* :speak_no_evil:"
 
-    return textwrap.dedent(
-        "*Your snippets for last week:*\n" +
-        _format_snippet_items(items)
-    )
+    return textwrap.dedent("*Your snippets for last week:*\n" + _format_snippet_items(items))
 
 
 def _linkify_usernames(text):
     """Slack wants @usernames to be surrounded in <> to be highlighted."""
-    return re.sub(r'(?<!<)(@[\w_]+)', r'<\1>', text)
+    return re.sub(r"(?<!<)(@[\w_]+)", r"<\1>", text)
 
 
 def _markdown_list(items):
@@ -288,8 +282,8 @@ def command_add(user_email, new_item):
 
     # TODO(csilvers): move this get/update/put atomic into a txn
     try:
-        snippet = _user_snippet(user_email)      # may raise ValueError
-        items = _snippet_items(snippet)          # may raise SyntaxError
+        snippet = _user_snippet(user_email)  # may raise ValueError
+        items = _snippet_items(snippet)  # may raise SyntaxError
     except ValueError:
         return _no_user_error(user_email)
     except SyntaxError:
@@ -306,7 +300,7 @@ def command_add(user_email, new_item):
 
     # TODO(mroth): we should abstract out DB writes to a library wrapper
     db.put(snippet)
-    db.get(snippet.key())    # ensure db consistency for HRD
+    db.get(snippet.key())  # ensure db consistency for HRD
     return "Added *{}* to your weekly snippets.".format(new_item)
 
 
@@ -331,8 +325,8 @@ def command_del(user_email, args):
 
     # TODO(csilvers): move this get/update/put atomic into a txn
     try:
-        snippet = _user_snippet(user_email)      # may raise ValueError
-        items = _snippet_items(snippet)          # may raise SyntaxError
+        snippet = _user_snippet(user_email)  # may raise ValueError
+        items = _snippet_items(snippet)  # may raise SyntaxError
     except ValueError:
         return _no_user_error(user_email)
     except SyntaxError:
@@ -346,16 +340,15 @@ def command_del(user_email, args):
         removed_item = items[index]
         del items[index]
     except IndexError:
-        return (
-            ":grey_question: You don't have anything at that index?!\n" +
-            _format_snippet_items(items)
+        return ":grey_question: You don't have anything at that index?!\n" + _format_snippet_items(
+            items
         )
 
     snippet.text = _markdown_list(items)
     snippet.is_markdown = True
 
     db.put(snippet)
-    db.get(snippet.key())    # ensure db consistency for HRD
+    db.get(snippet.key())  # ensure db consistency for HRD
     return "Removed *{}* from your weekly snippets.".format(removed_item)
 
 
@@ -365,7 +358,7 @@ def command_dump(user_email):
         snippet = _user_snippet(user_email)
     except ValueError:
         return _no_user_error(user_email)
-    return "```{}```".format(snippet.text or 'No snippet yet for this week')
+    return "```{}```".format(snippet.text or "No snippet yet for this week")
 
 
 class SlashCommand(webapp2.RequestHandler):
@@ -389,21 +382,22 @@ class SlashCommand(webapp2.RequestHandler):
         expected_token = AppSettings.get().slack_slash_token
 
         if not expected_token:
-            res.write('Slack slash commands disabled. An admin '
-                      'can enable them at /admin/settings')
+            res.write(
+                "Slack slash commands disabled. An admin an enable them at /admin/settings"
+            )
             return
 
         # verify slash API post token for security
         if _REQUIRE_SLASH_TOKEN:
-            token = req.get('token')
+            token = req.get("token")
             if token != expected_token:
                 logging.error("POST MADE WITH INVALID TOKEN")
                 res.write("OH NO YOU DIDNT! Security issue plz contact admin.")
                 return
 
-        user_name = req.get('user_name')
-        user_id = req.get('user_id')
-        text = req.get('text')
+        user_name = req.get("user_name")
+        user_id = req.get("user_id")
+        text = req.get("text")
 
         try:
             user_email = _get_user_email_cached(user_id)
@@ -417,46 +411,43 @@ class SlashCommand(webapp2.RequestHandler):
 
         words = text.strip().split()
         if not words:
-            logging.info('null (list) command from user %s', user_name)
+            logging.info("null (list) command from user %s", user_name)
             res.write(command_list(user_email))
         else:
             cmd, args = words[0], words[1:]
-            if cmd == 'help':
-                logging.info('help command from user %s', user_name)
+            if cmd == "help":
+                logging.info("help command from user %s", user_name)
                 res.write(command_help())
-            elif cmd == 'whoami':
+            elif cmd == "whoami":
                 # undocumented command to echo user email back
-                logging.info('whoami command from user %s', user_name)
+                logging.info("whoami command from user %s", user_name)
                 res.write(user_email)
-            elif cmd == 'whoami!':
+            elif cmd == "whoami!":
                 # whoami! forces a refresh of cache, for debugging
-                logging.info('whoami! command from user %s', user_name)
-                logging.info('whoami! potential cached email for %s: %s',
-                             user_name, user_email)
+                logging.info("whoami! command from user %s", user_name)
+                logging.info("whoami! potential cached email for %s: %s", user_name, user_email)
                 refreshed = _get_user_email_cached(user_id, force_refresh=True)
-                logging.info('whoami! refreshed email for %s: %s',
-                             user_name, refreshed)
+                logging.info("whoami! refreshed email for %s: %s", user_name, refreshed)
                 res.write(refreshed)
-            elif cmd == 'list':
+            elif cmd == "list":
                 # this is the same as the null command, but support for UX
-                logging.info('list command from user %s', user_name)
+                logging.info("list command from user %s", user_name)
                 res.write(command_list(user_email))
-            elif cmd == 'last':
-                logging.info('last command from user %s', user_name)
+            elif cmd == "last":
+                logging.info("last command from user %s", user_name)
                 res.write(command_last(user_email))
-            elif cmd == 'add':
-                logging.info('add command from user %s', user_name)
+            elif cmd == "add":
+                logging.info("add command from user %s", user_name)
                 res.write(command_add(user_email, " ".join(args)))
-            elif cmd == 'del':
-                logging.info('del command from user %s', user_name)
+            elif cmd == "del":
+                logging.info("del command from user %s", user_name)
                 res.write(command_del(user_email, args))
-            elif cmd == 'dump':
-                logging.info('dump command from user %s', user_name)
+            elif cmd == "dump":
+                logging.info("dump command from user %s", user_name)
                 res.write(command_dump(user_email))
             else:
-                logging.info('unknown command %s from user %s', cmd, user_name)
+                logging.info("unknown command %s from user %s", cmd, user_name)
                 res.write(
                     "I don't understand what you said! "
-                    "Perhaps you meant one of these?\n```%s```\n"
-                    % command_usage()
+                    "Perhaps you meant one of these?\n```%s```\n" % command_usage()
                 )

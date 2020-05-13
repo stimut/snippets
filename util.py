@@ -18,7 +18,7 @@ def existingsnippet_monday(today):
        The Monday that we are accepting new snippets for, by default,
        as a datetime.date (not datetime.datetime) object.
     """
-    today_weekday = today.weekday()   # monday == 0, sunday == 6
+    today_weekday = today.weekday()  # monday == 0, sunday == 6
     if today_weekday == 6 and today.hour >= 23:
         end_monday = today - datetime.timedelta(today_weekday)
     else:

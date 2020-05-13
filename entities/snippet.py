@@ -6,14 +6,15 @@ from google.appengine.ext import db
 
 class Snippet(db.Model):
     """Every snippet is identified by the monday of the week it goes with."""
+
     created = db.DateTimeProperty()
     last_modified = db.DateTimeProperty(auto_now=True)
-    display_name = db.StringProperty()        # display name of the user
+    display_name = db.StringProperty()  # display name of the user
     email = db.StringProperty(required=True)  # week+email: key to this record
-    week = db.DateProperty(required=True)     # the monday of the week
+    week = db.DateProperty(required=True)  # the monday of the week
     text = db.TextProperty()
-    private = db.BooleanProperty(default=False)       # snippet is private?
-    is_markdown = db.BooleanProperty(default=False)   # text is markdown?
+    private = db.BooleanProperty(default=False)  # snippet is private?
+    is_markdown = db.BooleanProperty(default=False)  # text is markdown?
 
     @property
     def email_md5_hash(self):
@@ -25,16 +26,16 @@ class Snippet(db.Model):
 def snippets_for_user(user_email):
     """Return all snippets for a given user, oldest snippet first."""
     snippets_q = Snippet.all()
-    snippets_q.filter('email = ', user_email)
-    snippets_q.order('week')            # this puts oldest snippet first
-    return snippets_q.fetch(1000)       # good for many years...
+    snippets_q.filter("email = ", user_email)
+    snippets_q.order("week")  # this puts oldest snippet first
+    return snippets_q.fetch(1000)  # good for many years...
 
 
 def most_recent_snippet_for_user(user_email):
     """Return the most recent snippet for a given user, or None."""
     snippets_q = Snippet.all()
-    snippets_q.filter('email = ', user_email)
-    snippets_q.order('-week')            # this puts newest snippet first
+    snippets_q.filter("email = ", user_email)
+    snippets_q.order("-week")  # this puts newest snippet first
     return snippets_q.get()
 
 
@@ -59,7 +60,7 @@ def _newsnippet_monday(today):
        The Monday that we are accepting new snippets for, by default,
        as a datetime.date (not datetime.datetime) object.
     """
-    today_weekday = today.weekday()   # monday == 0, sunday == 6
+    today_weekday = today.weekday()  # monday == 0, sunday == 6
     end_monday = today - datetime.timedelta(today_weekday)
     return end_monday.date()
 
@@ -67,16 +68,18 @@ def _newsnippet_monday(today):
 _ONE_WEEK = datetime.timedelta(7)
 
 
-def _backfill_missing_snippets(user, all_snippets,
-                               current_monday, first_allowed_monday):
+def _backfill_missing_snippets(user, all_snippets, current_monday, first_allowed_monday):
     monday_ptr = current_monday - _ONE_WEEK
     while monday_ptr >= first_allowed_monday:
-        all_snippets.insert(0,
-                            Snippet(
-                                email=user.email,
-                                week=monday_ptr,
-                                private=user.private_snippets,
-                                is_markdown=user.uses_markdown))
+        all_snippets.insert(
+            0,
+            Snippet(
+                email=user.email,
+                week=monday_ptr,
+                private=user.private_snippets,
+                is_markdown=user.uses_markdown,
+            ),
+        )
         monday_ptr -= _ONE_WEEK
 
 
@@ -111,28 +114,35 @@ def fill_in_missing_snippets(existing_snippets, user, user_email, today):
     # No snippets at all? Fill empty snippets up to one week before user's
     # registration week.
     if not existing_snippets:
-        all_snippets = [Snippet(email=user_email, week=end_monday,
-                                private=user.private_snippets,
-                                is_markdown=user.uses_markdown)]
-        _backfill_missing_snippets(user, all_snippets,
-                                   end_monday, first_allowed_monday)
+        all_snippets = [
+            Snippet(
+                email=user_email,
+                week=end_monday,
+                private=user.private_snippets,
+                is_markdown=user.uses_markdown,
+            )
+        ]
+        _backfill_missing_snippets(user, all_snippets, end_monday, first_allowed_monday)
         return all_snippets
 
     # Add a sentinel, one week past the last week we actually want.
     # We'll remove it at the end.
-    existing_snippets.append(Snippet(email=user_email,
-                                     week=end_monday + _ONE_WEEK))
+    existing_snippets.append(Snippet(email=user_email, week=end_monday + _ONE_WEEK))
 
-    all_snippets = [existing_snippets[0]]   # start with the oldest snippet
+    all_snippets = [existing_snippets[0]]  # start with the oldest snippet
     if all_snippets[0].week - first_allowed_monday >= _ONE_WEEK:
-        _backfill_missing_snippets(user, all_snippets,
-                                   all_snippets[0].week, first_allowed_monday)
+        _backfill_missing_snippets(user, all_snippets, all_snippets[0].week, first_allowed_monday)
     for snippet in existing_snippets[1:]:
         while snippet.week - all_snippets[-1].week > _ONE_WEEK:
             missing_week = all_snippets[-1].week + _ONE_WEEK
-            all_snippets.append(Snippet(email=user_email, week=missing_week,
-                                        private=user.private_snippets,
-                                        is_markdown=user.uses_markdown))
+            all_snippets.append(
+                Snippet(
+                    email=user_email,
+                    week=missing_week,
+                    private=user.private_snippets,
+                    is_markdown=user.uses_markdown,
+                )
+            )
         all_snippets.append(snippet)
 
     # Get rid of the sentinel we added above.

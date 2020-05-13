@@ -1,7 +1,7 @@
 from google.appengine.ext import db
 
 
-NULL_CATEGORY = '(unknown)'
+NULL_CATEGORY = "(unknown)"
 
 
 # Note: I use email address rather than a UserProperty to uniquely
@@ -19,23 +19,24 @@ NULL_CATEGORY = '(unknown)'
 
 class User(db.Model):
     """User preferences."""
+
     created = db.DateTimeProperty()
     last_modified = db.DateTimeProperty(auto_now=True)
-    email = db.StringProperty(required=True)           # The key to this record
-    is_hidden = db.BooleanProperty(default=False)      # hide 'empty' snippets
+    email = db.StringProperty(required=True)  # The key to this record
+    is_hidden = db.BooleanProperty(default=False)  # hide 'empty' snippets
     category = db.StringProperty(default=NULL_CATEGORY)  # groups snippets
     uses_markdown = db.BooleanProperty(default=True)  # interpret snippet text
     private_snippets = db.BooleanProperty(default=False)  # private by default?
-    wants_email = db.BooleanProperty(default=True)     # get nag emails?
+    wants_email = db.BooleanProperty(default=True)  # get nag emails?
     # TODO(csilvers): make a ListProperty instead.
-    wants_to_view = db.TextProperty(default='all')     # comma-separated list
-    display_name = db.TextProperty(default='')         #  display name of the user
+    wants_to_view = db.TextProperty(default="all")  # comma-separated list
+    display_name = db.TextProperty(default="")  #  display name of the user
 
 
 def get_user(email):
     """Return the user object with the given email, or None if not found."""
     q = User.all()
-    q.filter('email = ', email)
+    q.filter("email = ", email)
     return q.get()
 
 
